@@ -54,10 +54,10 @@ public class DensityHoe : IModApi
             ref Transform ___transformWireframeCube,
             ref Material ___previewMaterial)
         {
-            // CHANGED: Check if distance to hit is within our reached range FIRST
+            // Check if distance to hit is within our reached range
             float blockRangeSq = GetHoeActionRangeSq(_player?.inventory?
                     .holdingItemItemValue?.ItemClass?.Actions);
-            if (blockRangeSq < _hitInfo.hit.distanceSq) return true; // CHANGED: Return early if out of range
+            if (blockRangeSq < _hitInfo.hit.distanceSq) return true;
 
             int clrIdx = _hitInfo.hit.clrIdx;
             Vector3i blockPos = _hitInfo.hit.blockPos;
@@ -67,13 +67,15 @@ public class DensityHoe : IModApi
             // if (BV.rawData != _world.GetBlock(blockPos).rawData)
             // 	Log.Warning("Raw Data of Hit Block differs");
 
-            // CHANGED: Get density to determine wireframe height
+            // Get density to determine wireframe height
+            // May also be used to decide if hit is valid
             var density = _world.GetDensity(clrIdx, blockPos);
 
-            // CHANGED: Only handle terrain blocks - let original method handle everything else
+            // Only handle terrain blocks with negative density
+            // Let original method handle everything else (loot, chests, etc.)
             if (!(GameUtils.IsBlockOrTerrain(_hitInfo.tag) && BV.Block.shape.IsTerrain() && density < 0))
             {
-                return true; // CHANGED: Let original method run for non-terrain (loot, chests, etc.)
+                return true; // Run original method for non-terrain
             }
 
             // Do some cleanups we seen on original code
@@ -111,15 +113,6 @@ public class DensityHoe : IModApi
             ___localPos = new Bounds(new Vector3(0.5f, 0.5f, 0.5f), Vector3.one);
             ___multiDim = Vector3i.one; // Terrain blocks are never multi-dims?
 
-            // Note: disabled as too cheasy and doesn't always work (when not dense enough)
-            // We can work on focused terrain blocks or also if a block has already density.
-            // Second condition allows to spread the terrain over an area of opaque blocks.
-            // E.g. useful to make ground out of cement blocks, that still looks like grass.
-            // Not sure if this is considered cheating; IMO it just adds aesthetics if wanted
-            // if ((GameUtils.IsBlockOrTerrain(_hitInfo.tag) && BV.Block.shape.IsTerrain()) || 
-            //     density <= MarchingCubes.DensityTerrainHi) // to spread
-
-            // CHANGED: Removed the if check since we already validated above
             // Enable the two transforms (GameObjects) to show
             ___transformWireframeCube?.gameObject.SetActive(true);
             ___transformFocusCubePrefab?.gameObject.SetActive(true);
