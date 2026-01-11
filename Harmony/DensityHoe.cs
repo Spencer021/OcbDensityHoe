@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
@@ -54,12 +54,10 @@ public class DensityHoe : IModApi
             ref Transform ___transformWireframeCube,
             ref Material ___previewMaterial)
         {
-
-            // Do some cleanups we seen on original code
-            // Not exactly sure what it does, but seems to
-            // be safer to keep these than to skip them
-            MethodDestroyPreview.Invoke(__instance, null);
-            Object.DestroyImmediate(___previewMaterial);
+            // CHANGED: Check if distance to hit is within our reached range FIRST
+            float blockRangeSq = GetHoeActionRangeSq(_player?.inventory?
+                    .holdingItemItemValue?.ItemClass?.Actions);
+            if (blockRangeSq < _hitInfo.hit.distanceSq) return true; // CHANGED: Return early if out of range
 
             int clrIdx = _hitInfo.hit.clrIdx;
             Vector3i blockPos = _hitInfo.hit.blockPos;
@@ -69,17 +67,23 @@ public class DensityHoe : IModApi
             // if (BV.rawData != _world.GetBlock(blockPos).rawData)
             // 	Log.Warning("Raw Data of Hit Block differs");
 
-            // Check if distance to hit is within our reached range
-            float blockRangeSq = GetHoeActionRangeSq(_player?.inventory?
-                    .holdingItemItemValue?.ItemClass?.Actions);
-            if (blockRangeSq < _hitInfo.hit.distanceSq) return true;
+            // CHANGED: Get density to determine wireframe height
+            var density = _world.GetDensity(clrIdx, blockPos);
+
+            // CHANGED: Only handle terrain blocks - let original method handle everything else
+            if (!(GameUtils.IsBlockOrTerrain(_hitInfo.tag) && BV.Block.shape.IsTerrain() && density < 0))
+            {
+                return true; // CHANGED: Let original method run for non-terrain (loot, chests, etc.)
+            }
+
+            // Do some cleanups we seen on original code
+            // Not exactly sure what it does, but seems to
+            // be safer to keep these than to skip them
+            MethodDestroyPreview.Invoke(__instance, null);
+            Object.DestroyImmediate(___previewMaterial);
 
             // Update to avoid other code from thinking it's stale
             ___lastTimeFocusTransformMoved = Time.time;
-
-            // Get density to determine wireframe height
-            // May also be used to decide if hit is valid
-            var density = _world.GetDensity(clrIdx, blockPos);
 
             // Play safe to check for existence first
             if (___transformWireframeCube != null)
@@ -115,26 +119,18 @@ public class DensityHoe : IModApi
             // if ((GameUtils.IsBlockOrTerrain(_hitInfo.tag) && BV.Block.shape.IsTerrain()) || 
             //     density <= MarchingCubes.DensityTerrainHi) // to spread
 
-            if (GameUtils.IsBlockOrTerrain(_hitInfo.tag) && BV.Block.shape.IsTerrain() && density < 0)
-            {
-                // Enable the two transforms (GameObjects) to show
-                ___transformWireframeCube?.gameObject.SetActive(true);
-                ___transformFocusCubePrefab?.gameObject.SetActive(true);
-                // Update the color for the wire-frame
-                // For now we always have the same color
-                // Might see some use-case in the future
-                foreach (Renderer child in ___transformFocusCubePrefab?
-                            .GetComponentsInChildren<Renderer>())
-                    child.material.SetColor("_Color", Color.green);
-            }
-            else
-            {
-                // Disable the two transforms to hide the helpers
-                ___transformWireframeCube?.gameObject.SetActive(false);
-                ___transformFocusCubePrefab?.gameObject.SetActive(false);
-            }
+            // CHANGED: Removed the if check since we already validated above
+            // Enable the two transforms (GameObjects) to show
+            ___transformWireframeCube?.gameObject.SetActive(true);
+            ___transformFocusCubePrefab?.gameObject.SetActive(true);
+            // Update the color for the wire-frame
+            // For now we always have the same color
+            // Might see some use-case in the future
+            foreach (Renderer child in ___transformFocusCubePrefab?
+                        .GetComponentsInChildren<Renderer>())
+                child.material.SetColor("_Color", Color.green);
 
-            // Skip original
+            // Skip original ONLY for terrain blocks
             return false;
         }
 
